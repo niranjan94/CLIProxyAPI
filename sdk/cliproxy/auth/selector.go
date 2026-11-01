@@ -2138,6 +2138,9 @@ func (s *SessionAffinitySelector) InvalidateAuth(authID string) {
 	if s.matcher != nil {
 		s.matcher.InvalidateAuth(authID)
 	}
+	if invalidator, ok := s.fallback.(interface{ InvalidateAuth(string) }); ok && invalidator != nil {
+		invalidator.InvalidateAuth(authID)
+	}
 }
 
 // ForgetAuth forwards permanent credential removal to the fallback selector so
