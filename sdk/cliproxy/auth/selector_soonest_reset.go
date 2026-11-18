@@ -30,12 +30,13 @@ import (
 //  4. Credentials whose probe taught nothing (still no weekly reset) come after them.
 //
 // The probe is reserved when the probing pick is made, so concurrent picks probe each
-// credential once, and it is spent whatever the answer. Equal ranks take turns per provider
-// and model, like RoundRobinSelector: after a restart every credential is tied while its
-// probe is in flight, and a burst of new sessions must not all land on the first one.
+// credential once, and it is spent whatever the answer. Only Claude and Codex credentials
+// are probed; other providers report no usage windows, so they rank as unknown from the
+// start. Equal ranks take turns per provider and model, like
+// RoundRobinSelector: after a restart every credential is tied while its probe is in
+// flight, and a burst of new sessions must not all land on the first one.
 //
-// The strategy name, signal reading, probe rules and rotation of equal ranks follow
-// cliproxy-rs.
+// The strategy name and signal reading follow cliproxy-rs.
 type SoonestResetSelector struct {
 	mu sync.Mutex
 	// lastPicked records, per rotation key (provider and model), the ID picked last, so
@@ -125,7 +126,8 @@ func (s *SoonestResetSelector) pick(key string, auths []*Auth, now time.Time) *A
 		}
 		record, hasRecord := s.probes[candidate.ID]
 		// A full record cannot take a new credential, so one without a record is not probed.
-		probed := soonestResetProbed(record, hasRecord, windows[i].rolledOver) || (!hasRecord && full)
+		probed := !soonestResetProbeable(candidate.Provider) ||
+			soonestResetProbed(record, hasRecord, windows[i].rolledOver) || (!hasRecord && full)
 		ranks[i] = windows[i].rank(probed)
 		if best < 0 || ranks[i].less(ranks[best]) {
 			best = i
@@ -197,6 +199,16 @@ func (s *SoonestResetSelector) reserveProbeLocked(authID string, rolledOver *quo
 	}
 	if rolledOver != nil {
 		markers[rolledOver.window] = rolledOver.at
+	}
+}
+
+// soonestResetProbeable reports whether a provider's answers can state a weekly reset.
+func soonestResetProbeable(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "claude", "codex":
+		return true
+	default:
+		return false
 	}
 }
 

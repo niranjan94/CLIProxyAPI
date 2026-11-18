@@ -544,3 +544,20 @@ func TestSoonestResetSelector_WindowlessSnapshotKeepsLastWeeklyReset(t *testing.
 	stillB := soonestResetClaude("b", afterA, 3*soonestResetDay, "allowed")
 	assertSoonestResetPicks(t, "passed reset re-arms the probe", soonestResetPicks(selector, afterA, 2, windowless(later), stillB), "a", "b")
 }
+
+// Providers without usage windows are never probed: they rank as unknown behind known
+// resets and take no probe-record slot.
+func TestSoonestResetSelector_ProvidersWithoutWindowsAreNotProbed(t *testing.T) {
+	t.Parallel()
+
+	wall := soonestResetTestNow
+	selector := &SoonestResetSelector{}
+	gemini := &Auth{ID: "a-gemini", Provider: "gemini"}
+	apiKey := &Auth{ID: "b-api-key", Provider: "openai-compatibility"}
+	known := soonestResetClaude("c", wall, 3*soonestResetDay, "allowed")
+	assertSoonestResetPicks(t, "known reset ahead of unprobeable", soonestResetPicks(selector, wall, 2, gemini, apiKey, known), "c", "c")
+	assertSoonestResetPicks(t, "unprobeable rotate when alone", soonestResetPicks(selector, wall, 2, gemini, apiKey), "a-gemini", "b-api-key")
+	if len(selector.probes) != 0 {
+		t.Fatalf("probe record = %v, want empty", selector.probes)
+	}
+}

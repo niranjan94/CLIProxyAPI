@@ -768,7 +768,8 @@ func TestSoonestResetSelectorPick(t *testing.T) {
 				}),
 				{ID: "c-gemini", Provider: "gemini"},
 			},
-			want: []string{"c-gemini", "b-codex", "b-codex"},
+			// c-gemini cannot report a weekly reset, so it is never probed ahead of b-codex.
+			want: []string{"b-codex", "b-codex", "b-codex"},
 		},
 	}
 
