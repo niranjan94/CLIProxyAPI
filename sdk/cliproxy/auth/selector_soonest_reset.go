@@ -54,6 +54,19 @@ type SoonestResetSelector struct {
 	weeklyResets map[string]time.Time
 }
 
+// soonestResetProbeMetadataKey marks, in the request metadata, a session-affinity pick that
+// spent a soonest-reset probe. The probe ranks a credential first only to learn its weekly
+// reset, so it must not bind a session identified by the client or derived from the request:
+// its next request is ranked by what the probe learned. LCP bindings are left as they are,
+// because their session identity is published to the rest of the request.
+const soonestResetProbeMetadataKey = "soonest_reset_probe"
+
+// isSoonestResetProbe reports whether metadata marks the current pick as a probe.
+func isSoonestResetProbe(metadata map[string]any) bool {
+	probe, _ := metadata[soonestResetProbeMetadataKey].(bool)
+	return probe
+}
+
 // maxSoonestResetProbeEntries bounds the probe record. Records of removed credentials are
 // dropped through InvalidateAuth; the bound only guards against unbounded growth. At the
 // bound, credentials without a record are no longer probed: they rank as probed with an
@@ -77,14 +90,21 @@ func UnwrapSoonestResetSelector(selector Selector) *SoonestResetSelector {
 
 // Pick selects the available credential whose weekly quota window resets soonest.
 func (s *SoonestResetSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth) (*Auth, error) {
-	_ = opts
+	picked, _, err := s.pickReportingProbe(ctx, provider, model, auths)
+	return picked, err
+}
+
+// pickReportingProbe is Pick that also reports whether the pick spends a probe, which ranks
+// the credential first only to learn its weekly reset.
+func (s *SoonestResetSelector) pickReportingProbe(ctx context.Context, provider, model string, auths []*Auth) (*Auth, bool, error) {
 	now := time.Now()
 	available, err := getSelectorAvailableAuths(ctx, auths, provider, model, now)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	available = preferCodexWebsocketAuths(ctx, provider, available)
-	return s.pick(rotationKey(provider, model), available, now), nil
+	picked, probe := s.pickWithProbe(rotationKey(provider, model), available, now)
+	return picked, probe, nil
 }
 
 // InvalidateAuth forgets the probe record of a removed credential. The rotation needs no
@@ -103,6 +123,12 @@ func (s *SoonestResetSelector) InvalidateAuth(authID string) {
 // when the pick is one. Equally ranked candidates take turns under key: the first one
 // ordered after the ID picked last, wrapping around. Candidates arrive sorted by ID.
 func (s *SoonestResetSelector) pick(key string, auths []*Auth, now time.Time) *Auth {
+	picked, _ := s.pickWithProbe(key, auths, now)
+	return picked
+}
+
+// pickWithProbe is pick that also reports whether the pick spends a probe.
+func (s *SoonestResetSelector) pickWithProbe(key string, auths []*Auth, now time.Time) (*Auth, bool) {
 	// Snapshots are read before taking the lock; only the probe record and the rotation
 	// are shared state.
 	windows := make([]quotaWindows, len(auths))
@@ -136,7 +162,7 @@ func (s *SoonestResetSelector) pick(key string, auths []*Auth, now time.Time) *A
 		}
 	}
 	if best < 0 {
-		return nil
+		return nil, false
 	}
 	tied := make([]*Auth, 0, len(auths))
 	tiedIndex := make([]int, 0, len(auths))
@@ -149,10 +175,11 @@ func (s *SoonestResetSelector) pick(key string, auths []*Auth, now time.Time) *A
 	s.lastPicked = ensureRotationKey(s.lastPicked, key, defaultRotationKeys)
 	picked := tiedIndex[successorIndex(tied, s.lastPicked[key])]
 	s.lastPicked[key] = auths[picked].ID
-	if ranks[picked].class == soonestResetClassProbe {
+	probe := ranks[picked].class == soonestResetClassProbe
+	if probe {
 		s.reserveProbeLocked(auths[picked].ID, windows[picked].rolledOver)
 	}
-	return auths[picked]
+	return auths[picked], probe
 }
 
 // rememberWeeklyResetLocked records the weekly reset a snapshot states, or fills it in from

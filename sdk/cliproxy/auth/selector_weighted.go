@@ -44,6 +44,13 @@ func (s *SessionAffinitySelector) pickWithAffinityReservation(ctx context.Contex
 		if bound != nil {
 			return bound, nil
 		}
+		if soonest, okSoonest := s.fallback.(*SoonestResetSelector); okSoonest {
+			picked, probe, errPick := soonest.pickReportingProbe(ctx, provider, model, auths)
+			if probe && opts.Metadata != nil {
+				opts.Metadata[soonestResetProbeMetadataKey] = true
+			}
+			return picked, errPick
+		}
 		return s.fallback.Pick(ctx, provider, model, opts, auths)
 	}
 	picked, pending, errPick := weighted.reserveForRequest(ctx, provider, model, opts, auths, bound)

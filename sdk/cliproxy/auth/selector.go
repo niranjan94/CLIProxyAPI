@@ -1648,6 +1648,7 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 	}
 	opts.Metadata[cliproxyexecutor.SessionAffinityProviderMetadataKey] = provider
 	opts.Metadata[cliproxyexecutor.SessionAffinityModelMetadataKey] = model
+	delete(opts.Metadata, soonestResetProbeMetadataKey)
 
 	// Explicit harness identities are absolute authority. The LCP matcher is only
 	// consulted when no header, body, or execution-session identity is present.
@@ -1770,6 +1771,10 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 			entry.Infof("session-affinity: cache hit but auth transiently unavailable, failover without rebinding | session=%s bound_auth=%s failover_auth=%s provider=%s model=%s", truncateSessionID(primaryID), cachedAuthID, auth.ID, provider, model)
 			return auth, nil
 		}
+		if isSoonestResetProbe(opts.Metadata) {
+			entry.Infof("session-affinity: cache hit but auth unavailable, probe pick left unbound | session=%s bound_auth=%s probe_auth=%s provider=%s model=%s", truncateSessionID(primaryID), cachedAuthID, auth.ID, provider, model)
+			return auth, nil
+		}
 		bind(auth.ID, true)
 		entry.Infof("session-affinity: cache hit but auth unavailable, reselected | session=%s auth=%s provider=%s model=%s", truncateSessionID(primaryID), auth.ID, provider, model)
 		return auth, nil
@@ -1843,6 +1848,10 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 	}
 	if auth == nil {
 		return nil, nil
+	}
+	if isSoonestResetProbe(opts.Metadata) {
+		entry.Infof("session-affinity: cache miss, probe pick left unbound | session=%s auth=%s provider=%s model=%s", truncateSessionID(primaryID), auth.ID, provider, model)
+		return auth, nil
 	}
 	bind(auth.ID, true)
 	if isFork && fallbackID != "" {
