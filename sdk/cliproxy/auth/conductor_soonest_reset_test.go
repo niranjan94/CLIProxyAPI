@@ -148,8 +148,9 @@ func TestManagerSoonestResetRoutesByObservedQuota(t *testing.T) {
 				}
 			}
 			if affinity {
-				// A probe does not bind its session: the session's next request is ranked.
-				assertRoute("probe session moves to the earliest reset", options("probe-"+idA), idB)
+				// These requests carry no conversation, so they cannot be shown to open one: a
+				// probe binds the session like any cold pick, and the binding is kept.
+				assertRoute("probe session keeps its credential", options("probe-"+idA), idA)
 			}
 
 			// b's weekly window resets first, so new work goes there.

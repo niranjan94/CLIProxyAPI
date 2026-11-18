@@ -9,7 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MoeForge/moego/ojson"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
+	cliproxysession "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/session"
 )
 
 // SoonestResetSelector spends the credential whose weekly usage window resets soonest,
@@ -52,6 +54,39 @@ type SoonestResetSelector struct {
 	// Claude's request-scoped refusals) carry no window; without this, such a response
 	// would demote the credential behind every known reset until its next full answer.
 	weeklyResets map[string]time.Time
+}
+
+// requestOpensConversation reports whether a request is the first of its conversation: only
+// system and user turns, and no reference to earlier upstream state. Only such a request may
+// leave its session unbound after a soonest-reset probe. A later request may carry state that
+// only the credential which produced it accepts (Codex previous_response_id and encrypted
+// reasoning), and moving it after the probe would also throw away its prompt cache.
+func requestOpensConversation(opts cliproxyexecutor.Options) bool {
+	if len(opts.OriginalRequest) == 0 {
+		return false
+	}
+	root := ojson.ParseBytes(opts.OriginalRequest)
+	if root.Get("previous_response_id").String() != "" || root.Get("conversation").Exists() {
+		return false
+	}
+	continued := false
+	root.Get("input").ForEach(func(_, item ojson.Result) bool {
+		continued = strings.EqualFold(strings.TrimSpace(item.Get("type").String()), "reasoning")
+		return !continued
+	})
+	if continued {
+		return false
+	}
+	turns := cliproxysession.ExtractCanonicalTurns(opts.SourceFormat, opts.OriginalRequest)
+	if len(turns) == 0 {
+		return false
+	}
+	for _, turn := range turns {
+		if turn.Role != "system" && turn.Role != "user" {
+			return false
+		}
+	}
+	return true
 }
 
 // maxSoonestResetProbeEntries bounds the probe record. Records of removed credentials are

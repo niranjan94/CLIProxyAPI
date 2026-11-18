@@ -45,8 +45,8 @@ func (s *SessionAffinitySelector) pickWithAffinityReservation(ctx context.Contex
 
 // pickWithAffinityReservationReportingProbe is pickWithAffinityReservation that also reports
 // whether the pick spent a soonest-reset probe, which must not bind an explicit or derived
-// session. LCP bindings ignore it because their session identity is already published to
-// the rest of the request.
+// session whose request opens its conversation. LCP bindings ignore it because their session
+// identity is already published to the rest of the request.
 func (s *SessionAffinitySelector) pickWithAffinityReservationReportingProbe(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth, bound *Auth, reservation **weightedReservation) (*Auth, bool, error) {
 	weighted, ok := s.fallback.(*WeightedRoundRobinSelector)
 	if !ok {

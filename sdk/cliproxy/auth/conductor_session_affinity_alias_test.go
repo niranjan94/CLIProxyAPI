@@ -40,15 +40,9 @@ func TestManagerSessionAffinityAliasCooldownPreservesSelection(t *testing.T) {
 							Error: &Error{HTTPStatus: http.StatusTooManyRequests, Message: "model quota"},
 						})
 					}
-					// A known weekly reset spends soonest-reset's probe up front: a probe pick
-					// does not bind its session, which is not what this test is about.
-					quota := QuotaState{ObservedAt: time.Now(), Signals: map[string]string{
-						"X-Codex-Secondary-Reset-After-Seconds": "86400",
-						"X-Codex-Secondary-Window-Minutes":      "10080",
-					}}
 					for _, candidate := range []*Auth{
-						{ID: highID, Provider: "codex", Status: StatusActive, Attributes: map[string]string{"priority": "4", AttributeWeight: "1"}, Quota: quota},
-						{ID: lowID, Provider: "codex", Status: StatusActive, Attributes: map[string]string{"priority": "3", AttributeWeight: "1"}, Quota: quota},
+						{ID: highID, Provider: "codex", Status: StatusActive, Attributes: map[string]string{"priority": "4", AttributeWeight: "1"}},
+						{ID: lowID, Provider: "codex", Status: StatusActive, Attributes: map[string]string{"priority": "3", AttributeWeight: "1"}},
 					} {
 						registry.GetGlobalRegistry().RegisterClient(candidate.ID, "codex", []*registry.ModelInfo{{ID: routeModel}, {ID: targetModel}})
 						t.Cleanup(func() { registry.GetGlobalRegistry().UnregisterClient(candidate.ID) })

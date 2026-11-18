@@ -1770,7 +1770,7 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 			entry.Infof("session-affinity: cache hit but auth transiently unavailable, failover without rebinding | session=%s bound_auth=%s failover_auth=%s provider=%s model=%s", truncateSessionID(primaryID), cachedAuthID, auth.ID, provider, model)
 			return auth, nil
 		}
-		if probe {
+		if probe && requestOpensConversation(opts) {
 			entry.Infof("session-affinity: cache hit but auth unavailable, probe pick left unbound | session=%s bound_auth=%s probe_auth=%s provider=%s model=%s", truncateSessionID(primaryID), cachedAuthID, auth.ID, provider, model)
 			return auth, nil
 		}
@@ -1848,7 +1848,7 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 	if auth == nil {
 		return nil, nil
 	}
-	if probe {
+	if probe && requestOpensConversation(opts) {
 		entry.Infof("session-affinity: cache miss, probe pick left unbound | session=%s auth=%s provider=%s model=%s", truncateSessionID(primaryID), auth.ID, provider, model)
 		return auth, nil
 	}
