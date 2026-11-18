@@ -32,15 +32,17 @@ import (
 // The probe is reserved when the probing pick is made, so concurrent picks probe each
 // credential once, and it is spent whatever the answer. Only Claude and Codex credentials
 // are probed; other providers report no usage windows, so they rank as unknown from the
-// start. Equal ranks take turns per provider and model, like
-// RoundRobinSelector: after a restart every credential is tied while its probe is in
-// flight, and a burst of new sessions must not all land on the first one.
+// start. Equal ranks take turns per provider (and per model when the Manager passes one,
+// which it does only under session affinity), like RoundRobinSelector: after a restart
+// every credential is tied while its probe is in flight, and a burst of new sessions must
+// not all land on the first one.
 //
 // The strategy name and signal reading follow cliproxy-rs.
 type SoonestResetSelector struct {
 	mu sync.Mutex
-	// lastPicked records, per rotation key (provider and model), the ID picked last, so
-	// equally ranked credentials take turns. It is bounded like RoundRobinSelector's.
+	// lastPicked records, per rotation key (provider, plus model when one is passed), the ID
+	// picked last, so equally ranked credentials take turns. It is bounded like
+	// RoundRobinSelector's.
 	lastPicked map[string]string
 	// probes records, per credential ID, that its probe for an unknown weekly reset was
 	// spent, with the weekly-window rollover last probed for, per window.
