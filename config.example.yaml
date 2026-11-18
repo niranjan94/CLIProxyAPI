@@ -559,6 +559,15 @@ upstream:
     # for Responses).
     server-side-fallback: false
 
+    # When true, read the model list Anthropic reports for each Claude OAuth credential (15 seconds
+    # after start, then hourly; new credentials within 5 minutes) and register the models the catalog
+    # does not list on that credential only. Use this for models offered to some accounts only, such
+    # as Claude Mythos for accounts verified through Anthropic's Cyber Verification Program.
+    # A Mythos model takes its capability metadata from the Fable model of the same version; other
+    # unknown models take it from the catalog model with the closest name. Catalog models are never
+    # removed or changed, and oauth-excluded-models still applies. Default false uses the catalog alone.
+    live-models: false
+
     # Days to retain the cloaked currentDate pin per session in in-memory mode
     # (server.kv-store.disabled: true without Home), so an idle gap or a credential
     # switch cannot re-anchor the date and invalidate earlier thinking signatures and the

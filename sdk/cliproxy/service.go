@@ -166,6 +166,8 @@ type Service struct {
 	antigravityRefreshPending map[string]*antigravityModelRefreshRequest
 	antigravityPersistPending map[string]*antigravityHintPersistRequest
 	antigravityPersistActive  map[string]*antigravityHintPersistRequest
+	// claudeLiveModels holds the models discovered per Claude OAuth credential.
+	claudeLiveModels claudeLiveModelCache
 }
 
 // SetResultPolicy sets an execution result policy on the underlying core auth manager.

@@ -235,6 +235,7 @@ func (s *Service) Run(ctx context.Context) error {
 
 	s.registerModelRefreshCallback()
 	if !homeEnabled {
+		s.startClaudeLiveModelSync(ctx)
 		go s.runAntigravityModelRefresh(ctx)
 	}
 

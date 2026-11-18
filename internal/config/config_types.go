@@ -136,6 +136,10 @@ type ClaudeConfig struct {
 	// KV) is active, session date pins are persisted permanently and
 	// session-date-pin-days is ignored.
 	SessionDatePinDays *int `yaml:"session-date-pin-days" json:"session-date-pin-days"`
+	// LiveModels reads the model list Anthropic reports for each Claude OAuth
+	// credential and registers models the catalog does not list on that
+	// credential only. Default false uses the catalog alone.
+	LiveModels bool `yaml:"live-models" json:"live-models"`
 }
 
 // DefaultClaudeSessionDatePinDays is the session date pin retention applied
