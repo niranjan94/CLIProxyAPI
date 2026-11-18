@@ -54,19 +54,6 @@ type SoonestResetSelector struct {
 	weeklyResets map[string]time.Time
 }
 
-// soonestResetProbeMetadataKey marks, in the request metadata, a session-affinity pick that
-// spent a soonest-reset probe. The probe ranks a credential first only to learn its weekly
-// reset, so it must not bind a session identified by the client or derived from the request:
-// its next request is ranked by what the probe learned. LCP bindings are left as they are,
-// because their session identity is published to the rest of the request.
-const soonestResetProbeMetadataKey = "soonest_reset_probe"
-
-// isSoonestResetProbe reports whether metadata marks the current pick as a probe.
-func isSoonestResetProbe(metadata map[string]any) bool {
-	probe, _ := metadata[soonestResetProbeMetadataKey].(bool)
-	return probe
-}
-
 // maxSoonestResetProbeEntries bounds the probe record. Records of removed credentials are
 // dropped through InvalidateAuth; the bound only guards against unbounded growth. At the
 // bound, credentials without a record are no longer probed: they rank as probed with an

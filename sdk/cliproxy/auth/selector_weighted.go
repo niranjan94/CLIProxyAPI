@@ -39,23 +39,29 @@ type weightedReservation struct {
 // pickWithAffinityReservation normalizes weighted candidates and defers accounting
 // until the local binding completes. Other fallback selectors keep their behavior.
 func (s *SessionAffinitySelector) pickWithAffinityReservation(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth, bound *Auth, reservation **weightedReservation) (*Auth, error) {
+	picked, _, errPick := s.pickWithAffinityReservationReportingProbe(ctx, provider, model, opts, auths, bound, reservation)
+	return picked, errPick
+}
+
+// pickWithAffinityReservationReportingProbe is pickWithAffinityReservation that also reports
+// whether the pick spent a soonest-reset probe, which must not bind an explicit or derived
+// session. LCP bindings ignore it because their session identity is already published to
+// the rest of the request.
+func (s *SessionAffinitySelector) pickWithAffinityReservationReportingProbe(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth, bound *Auth, reservation **weightedReservation) (*Auth, bool, error) {
 	weighted, ok := s.fallback.(*WeightedRoundRobinSelector)
 	if !ok {
 		if bound != nil {
-			return bound, nil
+			return bound, false, nil
 		}
 		if soonest, okSoonest := s.fallback.(*SoonestResetSelector); okSoonest {
-			picked, probe, errPick := soonest.pickReportingProbe(ctx, provider, model, auths)
-			if probe && opts.Metadata != nil {
-				opts.Metadata[soonestResetProbeMetadataKey] = true
-			}
-			return picked, errPick
+			return soonest.pickReportingProbe(ctx, provider, model, auths)
 		}
-		return s.fallback.Pick(ctx, provider, model, opts, auths)
+		picked, errPick := s.fallback.Pick(ctx, provider, model, opts, auths)
+		return picked, false, errPick
 	}
 	picked, pending, errPick := weighted.reserveForRequest(ctx, provider, model, opts, auths, bound)
 	*reservation = pending
-	return picked, errPick
+	return picked, false, errPick
 }
 
 // reserveForRequest shares candidate normalization and pinned accounting between

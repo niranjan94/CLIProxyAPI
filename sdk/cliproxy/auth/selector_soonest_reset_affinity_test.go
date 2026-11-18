@@ -62,8 +62,8 @@ func TestSessionAffinitySoonestResetProbeDoesNotBindSession(t *testing.T) {
 	}
 }
 
-// The probe marker is per pick: a later ranked pick reusing the request metadata must bind.
-func TestSessionAffinitySoonestResetProbeMarkerResetsPerPick(t *testing.T) {
+// A ranked pick after a probe binds the session, even when the request metadata is reused.
+func TestSessionAffinitySoonestResetRankedPickAfterProbeBinds(t *testing.T) {
 	now := time.Now()
 	soloAuth := &Auth{ID: "claude-a", Provider: "claude"}
 	selector := NewSessionAffinitySelectorWithConfig(SessionAffinityConfig{
@@ -79,16 +79,13 @@ func TestSessionAffinitySoonestResetProbeMarkerResetsPerPick(t *testing.T) {
 	if _, errPick := selector.Pick(context.Background(), "claude", "claude-opus-5-5", opts, []*Auth{soloAuth}); errPick != nil {
 		t.Fatalf("probe Pick() error = %v", errPick)
 	}
-	if !isSoonestResetProbe(opts.Metadata) {
-		t.Fatal("probe pick did not mark the request metadata")
+	if authID, _ := selector.LookupAffinity("claude", "claude-opus-5-5", "session-1"); authID != "" {
+		t.Fatalf("LookupAffinity() after probe = %q, want unbound", authID)
 	}
 
 	soloAuth.Quota = QuotaState{ObservedAt: now, Signals: claudeProductionQuotaSignals(soonestResetEpoch(now.Add(12*time.Hour)), "0")}
 	if _, errPick := selector.Pick(context.Background(), "claude", "claude-opus-5-5", opts, []*Auth{soloAuth}); errPick != nil {
 		t.Fatalf("ranked Pick() error = %v", errPick)
-	}
-	if isSoonestResetProbe(opts.Metadata) {
-		t.Fatal("ranked pick kept the probe marker from the previous pick")
 	}
 	if authID, _ := selector.LookupAffinity("claude", "claude-opus-5-5", "session-1"); authID != soloAuth.ID {
 		t.Fatalf("LookupAffinity() = %q, want %q", authID, soloAuth.ID)
