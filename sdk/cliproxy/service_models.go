@@ -155,6 +155,7 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
 				excluded = entry.ExcludedModels
 			}
 		}
+		models = s.withClaudeLiveModels(cfg, a, models)
 		models = applyExcludedModels(models, excluded)
 	case "codex":
 		if authKind == "apikey" {
