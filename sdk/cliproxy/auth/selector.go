@@ -1758,7 +1758,7 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 			return nil, err
 		}
 		// Cached auth not available, reselect via fallback selector for even distribution
-		auth, err := s.pickWithAffinityReservation(ctx, provider, model, opts, fallbackAuths, nil, &reservation)
+		auth, probe, err := s.pickWithAffinityReservationReportingProbe(ctx, provider, model, opts, fallbackAuths, nil, &reservation)
 		if err != nil {
 			return nil, err
 		}
@@ -1768,6 +1768,10 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 		if s.shouldPreserveBindingWhenUnavailable(ctx, availabilityCandidates, model, cachedAuthID, now) {
 			bind(cachedAuthID, false)
 			entry.Infof("session-affinity: cache hit but auth transiently unavailable, failover without rebinding | session=%s bound_auth=%s failover_auth=%s provider=%s model=%s", truncateSessionID(primaryID), cachedAuthID, auth.ID, provider, model)
+			return auth, nil
+		}
+		if probe && requestOpensConversation(opts) {
+			entry.Infof("session-affinity: cache hit but auth unavailable, probe pick left unbound | session=%s bound_auth=%s probe_auth=%s provider=%s model=%s", truncateSessionID(primaryID), cachedAuthID, auth.ID, provider, model)
 			return auth, nil
 		}
 		bind(auth.ID, true)
@@ -1837,12 +1841,16 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 	if err != nil {
 		return nil, err
 	}
-	auth, err := s.pickWithAffinityReservation(ctx, provider, model, opts, fallbackAuths, nil, &reservation)
+	auth, probe, err := s.pickWithAffinityReservationReportingProbe(ctx, provider, model, opts, fallbackAuths, nil, &reservation)
 	if err != nil {
 		return nil, err
 	}
 	if auth == nil {
 		return nil, nil
+	}
+	if probe && requestOpensConversation(opts) {
+		entry.Infof("session-affinity: cache miss, probe pick left unbound | session=%s auth=%s provider=%s model=%s", truncateSessionID(primaryID), auth.ID, provider, model)
+		return auth, nil
 	}
 	bind(auth.ID, true)
 	if isFork && fallbackID != "" {

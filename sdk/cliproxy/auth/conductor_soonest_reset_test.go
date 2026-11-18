@@ -148,7 +148,8 @@ func TestManagerSoonestResetRoutesByObservedQuota(t *testing.T) {
 				}
 			}
 			if affinity {
-				// A probe binds its session like any cold pick; the binding is kept.
+				// These requests carry no conversation, so they cannot be shown to open one: a
+				// probe binds the session like any cold pick, and the binding is kept.
 				assertRoute("probe session keeps its credential", options("probe-"+idA), idA)
 			}
 
