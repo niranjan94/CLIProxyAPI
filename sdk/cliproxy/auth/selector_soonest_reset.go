@@ -44,6 +44,11 @@ type SoonestResetSelector struct {
 	// probes records, per credential ID, that its probe for an unknown weekly reset was
 	// spent, with the weekly-window rollover last probed for, per window.
 	probes map[string]map[quotaWindowID]time.Time
+	// weeklyResets records, per credential ID, the last weekly reset a snapshot stated. The
+	// snapshot is replaced by every response carrying quota headers, and some (such as
+	// Claude's request-scoped refusals) carry no window; without this, such a response
+	// would demote the credential behind every known reset until its next full answer.
+	weeklyResets map[string]time.Time
 }
 
 // maxSoonestResetProbeEntries bounds the probe record. Records of removed credentials are
@@ -73,6 +78,7 @@ func (s *SoonestResetSelector) InvalidateAuth(authID string) {
 	}
 	s.mu.Lock()
 	delete(s.probes, authID)
+	delete(s.weeklyResets, authID)
 	s.mu.Unlock()
 }
 
@@ -91,6 +97,11 @@ func (s *SoonestResetSelector) pick(key string, auths []*Auth, now time.Time) *A
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for i, candidate := range auths {
+		if candidate != nil {
+			s.rememberWeeklyResetLocked(candidate.ID, &windows[i], now)
+		}
+	}
 	full := len(s.probes) >= maxSoonestResetProbeEntries
 	ranks := make([]soonestResetRank, len(auths))
 	best := -1
@@ -124,6 +135,35 @@ func (s *SoonestResetSelector) pick(key string, auths []*Auth, now time.Time) *A
 		s.reserveProbeLocked(auths[picked].ID, windows[picked].rolledOver)
 	}
 	return auths[picked]
+}
+
+// rememberWeeklyResetLocked records the weekly reset a snapshot states, or fills it in from
+// the last one recorded while that is still ahead. Once a recorded reset passes without a
+// snapshot stating the next one, the window rolled over unseen, so the probe is re-armed.
+// Must be called with s.mu held.
+func (s *SoonestResetSelector) rememberWeeklyResetLocked(authID string, windows *quotaWindows, now time.Time) {
+	if !windows.weeklyReset.IsZero() {
+		if _, ok := s.weeklyResets[authID]; !ok && len(s.weeklyResets) >= maxSoonestResetProbeEntries {
+			return
+		}
+		if s.weeklyResets == nil {
+			s.weeklyResets = make(map[string]time.Time)
+		}
+		s.weeklyResets[authID] = windows.weeklyReset
+		return
+	}
+	recorded, ok := s.weeklyResets[authID]
+	if !ok {
+		return
+	}
+	if recorded.After(now) {
+		windows.weeklyReset = recorded
+		return
+	}
+	delete(s.weeklyResets, authID)
+	if windows.rolledOver == nil {
+		delete(s.probes, authID)
+	}
 }
 
 // reserveProbeLocked spends a credential's probe. The next pick ranks it by what the

@@ -519,3 +519,28 @@ func TestSoonestResetSelectorPick_EqualKnownResetsTakeTurns(t *testing.T) {
 	earlier := soonestResetClaude("b", observed, soonestResetDay, "allowed")
 	assertSoonestResetPicks(t, "earlier reset always wins", soonestResetPickSequence(t, &SoonestResetSelector{}, 4, sameA, earlier, sameC), "b", "b", "b", "b")
 }
+
+// A response whose quota headers carry no weekly window replaces the snapshot; the account
+// keeps the weekly reset it last reported until that reset passes, and is probed again
+// once it has.
+func TestSoonestResetSelector_WindowlessSnapshotKeepsLastWeeklyReset(t *testing.T) {
+	t.Parallel()
+
+	wall := soonestResetTestNow
+	selector := &SoonestResetSelector{}
+	a := soonestResetClaude("a", wall, soonestResetDay, "allowed")
+	b := soonestResetClaude("b", wall, 4*soonestResetDay, "allowed")
+	assertSoonestResetPicks(t, "soonest weekly reset", soonestResetPicks(selector, wall, 1, a, b), "a")
+
+	windowless := func(observed time.Time) *Auth {
+		return soonestResetAuth("a", "claude", observed, map[string]string{
+			"Anthropic-Ratelimit-Unified-Status": "allowed",
+		})
+	}
+	later := wall.Add(time.Minute)
+	assertSoonestResetPicks(t, "windowless answer keeps the reset", soonestResetPicks(selector, later, 2, windowless(later), b), "a", "a")
+
+	afterA := wall.Add(soonestResetDay + time.Minute)
+	stillB := soonestResetClaude("b", afterA, 3*soonestResetDay, "allowed")
+	assertSoonestResetPicks(t, "passed reset re-arms the probe", soonestResetPicks(selector, afterA, 2, windowless(later), stillB), "a", "b")
+}
