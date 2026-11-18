@@ -58,6 +58,20 @@ type SoonestResetSelector struct {
 // one probe per rollover, and nothing is evicted, so no credential is probed twice.
 const maxSoonestResetProbeEntries = 4096
 
+// UnwrapSoonestResetSelector returns selector, or the fallback of a session-affinity
+// selector, when it is a SoonestResetSelector.
+func UnwrapSoonestResetSelector(selector Selector) *SoonestResetSelector {
+	if soonest, ok := selector.(*SoonestResetSelector); ok {
+		return soonest
+	}
+	if affinity, ok := selector.(*SessionAffinitySelector); ok && affinity != nil {
+		if soonest, okFallback := affinity.fallback.(*SoonestResetSelector); okFallback {
+			return soonest
+		}
+	}
+	return nil
+}
+
 // Pick selects the available credential whose weekly quota window resets soonest.
 func (s *SoonestResetSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth) (*Auth, error) {
 	_ = opts

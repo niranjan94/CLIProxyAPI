@@ -121,7 +121,11 @@ func newRoutingSelectorWithExisting(state routingRuntimeState, existing coreauth
 	case "fill-first":
 		selector = &coreauth.FillFirstSelector{}
 	case "soonest-reset":
-		selector = &coreauth.SoonestResetSelector{}
+		if existingSoonest := coreauth.UnwrapSoonestResetSelector(existing); existingSoonest != nil {
+			selector = existingSoonest
+		} else {
+			selector = &coreauth.SoonestResetSelector{}
+		}
 	default:
 		selector = &coreauth.RoundRobinSelector{}
 	}

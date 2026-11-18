@@ -64,3 +64,32 @@ func TestSoonestResetRoutingSelectorWithSessionAffinity(t *testing.T) {
 		t.Fatalf("Pick() = %v, want b", picked)
 	}
 }
+
+func TestSoonestResetRoutingSelectorKeptAcrossRoutingChanges(t *testing.T) {
+	plain := normalizedRoutingRuntimeState(&internalconfig.Config{
+		Routing: internalconfig.RoutingConfig{Strategy: "soonest-reset"},
+	})
+	withAffinity := normalizedRoutingRuntimeState(&internalconfig.Config{
+		Routing: internalconfig.RoutingConfig{Strategy: "soonest-reset", SessionAffinity: true},
+	})
+
+	original := newRoutingSelector(plain)
+	soonest := coreauth.UnwrapSoonestResetSelector(original)
+	if soonest == nil {
+		t.Fatalf("selector type = %T, want *auth.SoonestResetSelector", original)
+	}
+
+	wrapped := newRoutingSelectorWithExisting(withAffinity, original)
+	affinity, ok := wrapped.(*coreauth.SessionAffinitySelector)
+	if !ok {
+		t.Fatalf("selector type = %T, want *auth.SessionAffinitySelector", wrapped)
+	}
+	t.Cleanup(affinity.Stop)
+	if got := coreauth.UnwrapSoonestResetSelector(wrapped); got != soonest {
+		t.Fatal("enabling session affinity replaced the soonest-reset selector")
+	}
+
+	if got := newRoutingSelectorWithExisting(plain, wrapped); got != coreauth.Selector(soonest) {
+		t.Fatal("disabling session affinity replaced the soonest-reset selector")
+	}
+}
